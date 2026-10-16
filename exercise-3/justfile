@@ -1,0 +1,72 @@
+onos-setup:
+    # 8181: web-ui, 6653: openflow, 8101: Onos Karaf CLI
+    # 使用host网络，让onos在容器内的进程可以从容器内直接连接mininet启动的P4Runtime协议的P4交换机的gPRC服务端口
+    @echo "install apps in startup:"
+    @echo "app activate org.onosproject.drivers.bmv2"
+    @echo "app activate org.onosproject.pipelines.basic"
+    @echo "app activate org.onosproject.fwd"
+    @echo "app activate org.onosproject.hostprovider"
+    @echo "app activate org.onosproject.proxyarp"
+    @echo "app activate org.onosproject.lldpprovider"
+    docker run -d --name onos \
+        --network host \
+        -e ONOS_APPS=proxyarp,hostprovider,lldpprovider,fwd,drivers.bmv2,pipelines.basic \
+        onosproject/onos:2.7.0
+
+onos-logs:
+    docker logs onos -f
+onos-cli:
+    ssh-keygen -f "/home/xin/.ssh/known_hosts" -R "[127.0.0.1]:8101"
+    @echo "password: karaf"
+    ssh -p 8101 -oHostKeyAlgorithms=+ssh-rsa karaf@127.0.0.1
+onos-shell:
+    docker exec -ti onos bash
+onos-start:
+    docker start onos
+onos-stop:
+    docker stop onos
+onos-rm:
+    docker rm onos
+onos-clean: onos-stop onos-rm
+
+onos-netcfg:
+    curl -u onos:rocks \
+        -X POST -H "Content-Type: application/json" \
+        http://127.0.0.1:8181/onos/v1/network/configuration \
+        -d @netcfg-single.json
+onos-netcfg-check:
+    curl -u onos:rocks -s \
+        http://127.0.0.1:8181/onos/v1/network/configuration | python3 -m json.tool
+
+
+
+basic_json:
+    # 使用org.onosproject.p4tutorial.pipeconf的jar包中解压出来的版本；
+    # 该文件是由p4c编译器编译p4程序生成的json文件，包含了数据平面行为的描述。
+    # 这个文件将由mininet脚本在初始化P4交换机时加载到simple_switch做为数据平面的pipeline（可编程性体现在这里！！）
+    # onos容器内的.oar文件路径是：
+    docker cp onos:/root/onos/apps/org.onosproject.pipelines.basic/org.onosproject.pipelines.basic.oar /tmp/basic.oar
+    mkdir -p /tmp/basic
+    unzip /tmp/basic.oar -d /tmp/basic
+    chmod 777 /tmp/basic/m2/org/onosproject/onos-pipelines-basic/2.7.0/onos-pipelines-basic-2.7.0.jar
+    unzip /tmp/basic/m2/org/onosproject/onos-pipelines-basic/2.7.0/onos-pipelines-basic-2.7.0.jar -d /tmp/basic
+    cp /tmp/basic/p4c-out/bmv2/basic.json .
+
+mn-setup:
+    docker run -d \
+        --privileged --rm -it \
+        --network host \
+        --name mn-stratum \
+        -v ${PWD}:/app \
+        -v /tmp/mn-stratum:/tmp \
+        --entrypoint /bin/bash \
+        opennetworking/mn-stratum:22.06 \
+        -c "tail -f /dev/null"
+mn-teardown:
+    docker stop mn-stratum
+mn-logs:
+    docker logs mn-stratum -f
+mn-cli:
+    docker exec -ti mn-stratum bash
+start:
+    docker exec -ti mn-stratum bash -c "cd /app && python p4_single.py"

@@ -1,0 +1,28 @@
+python := 'PYTHONPATH="/home/xin/repo/sdn" python3'
+
+start1:
+    sudo {{python}} ovs.py
+
+start2:
+    sudo {{python}} ovs-remote-controller.py
+
+# setup remote controller: ONOS
+onos-setup:
+    # 8181: web-ui, 6653: openflow, 8101: Onos Karaf CLI
+    docker run -d --name onos \
+        -p "8181:8181" -p "6653:6653" -p "8101:8101" \
+        onosproject/onos:2.7.0
+onos-logs:
+    docker logs onos -f
+onos-cli:
+    @echo "password: karaf"
+    ssh -p 8101 -oHostKeyAlgorithms=+ssh-rsa karaf@127.0.0.1
+onos-shell:
+    docker exec -ti onos bash
+onos-start:
+    docker start onos
+onos-stop:
+    docker stop onos
+onos-rm:
+    docker rm onos
+onos-clean: onos-stop onos-rm

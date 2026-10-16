@@ -1,0 +1,6 @@
+python := 'PYTHONPATH="/home/xin/repo/sdn" python3'
+
+start1:
+    sudo {{python}} topo.py
+start1:
+    sudo {{python}} topo-perf.py
