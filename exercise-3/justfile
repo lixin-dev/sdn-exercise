@@ -1,16 +1,11 @@
-onos-setup:
+onos-setup: onos-clean
     # 8181: web-ui, 6653: openflow, 8101: Onos Karaf CLI
     # 使用host网络，让onos在容器内的进程可以从容器内直接连接mininet启动的P4Runtime协议的P4交换机的gPRC服务端口
     @echo "install apps in startup:"
-    @echo "app activate org.onosproject.drivers.bmv2"
-    @echo "app activate org.onosproject.pipelines.basic"
     @echo "app activate org.onosproject.fwd"
-    @echo "app activate org.onosproject.hostprovider"
-    @echo "app activate org.onosproject.proxyarp"
-    @echo "app activate org.onosproject.lldpprovider"
     docker run -d --name onos \
         --network host \
-        -e ONOS_APPS=proxyarp,hostprovider,lldpprovider,fwd,drivers.bmv2,pipelines.basic \
+        -e ONOS_APPS=proxyarp,hostprovider,lldpprovider,drivers.bmv2,pipelines.basic \
         onosproject/onos:2.7.0
 
 onos-logs:
@@ -18,6 +13,11 @@ onos-logs:
 onos-cli:
     ssh-keygen -f "/home/xin/.ssh/known_hosts" -R "[127.0.0.1]:8101"
     @echo "password: karaf"
+    # org.onosproject.fwd 会安装泛洪流表，将 LLDP/BDDP 报文泛洪到所有端口。在多跳拓扑中，LLDP 会跨交换机传播，ONOS 从错误端口收到 LLDP，验证失败，链路被丢弃，拓扑反复抖动。
+    # 解决：在 ONOS 中禁用 BDDP，只使用 LLDP（单跳）：
+    @echo "cfg set org.onosproject.provider.lldp.impl.LldpLinkProvider useBddp false"
+    # 最后，启动激活fwd应用，解决fwd与lldp的BDDP冲突的问题
+    @echo "app activate org.onosproject.fwd"
     ssh -p 8101 -oHostKeyAlgorithms=+ssh-rsa karaf@127.0.0.1
 onos-shell:
     docker exec -ti onos bash
@@ -29,15 +29,19 @@ onos-rm:
     docker rm onos
 onos-clean: onos-stop onos-rm
 
-onos-netcfg:
+onos-netcfg-single:
     curl -u onos:rocks \
         -X POST -H "Content-Type: application/json" \
         http://127.0.0.1:8181/onos/v1/network/configuration \
         -d @netcfg-single.json
+onos-netcfg-multiple:
+    curl -u onos:rocks \
+        -X POST -H "Content-Type: application/json" \
+        http://127.0.0.1:8181/onos/v1/network/configuration \
+        -d @netcfg-multiple.json
 onos-netcfg-check:
     curl -u onos:rocks -s \
         http://127.0.0.1:8181/onos/v1/network/configuration | python3 -m json.tool
-
 
 
 basic_json:
@@ -68,5 +72,10 @@ mn-logs:
     docker logs mn-stratum -f
 mn-cli:
     docker exec -ti mn-stratum bash
-start:
+
+start-single:
     docker exec -ti mn-stratum bash -c "cd /app && python p4_single.py"
+
+start-multiple:
+    docker exec -ti mn-stratum bash -c "cd /app && python p4_multiple.py"
+

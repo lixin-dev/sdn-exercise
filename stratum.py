@@ -122,10 +122,12 @@ class StratumBmv2Switch(Switch):
         self.latitude = kwargs['latitude'] if 'latitude' in kwargs else None
         if onosdevid is not None and len(onosdevid) > 0:
             self.onosDeviceId = onosdevid
+            self.nodeId = int(onosdevid)
         else:
             # The "device:" prefix is required by ONOS.
             self.onosDeviceId = "device:%s" % self.name
-        self.nodeId = DEFAULT_NODE_ID
+            self.nodeId = DEFAULT_NODE_ID
+        
         self.logfd = None
         self.bmv2popen = None
         self.stopped = True
